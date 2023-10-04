@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kafka-pv
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Gi
+  nfs:
+    path: /kafka
+    server: fs-09eff9099a3d1bfb6.efs.us-east-2.amazonaws.com
+  persistentVolumeReclaimPolicy: Retain
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kafka-logs-pv
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Gi
+  nfs:
+    path: /kafka/logs
+    server: fs-09eff9099a3d1bfb6.efs.us-east-2.amazonaws.com
+  persistentVolumeReclaimPolicy: Retain
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-pvc
+  namespace: default
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: kafka-pv
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-logs-pvc
+  namespace: default
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: kafka-logs-pv
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: kafka
+  namespace: default
+data:
+  KAFKA_BROKER_ID: "1"
+  KAFKA_LOG_DIRS: /var/lib/kafka/data
+  KAFKA_ZOOKEEPER_CONNECT: "zookeeper-service:2181"
+  KAFKA_ADVERTISED_LISTENERS: "INTERNAL://:9092,OUTSIDE://127.0.0.0:29092"
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT"
+  KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+  KAFKA_LOG_CLEANUP_POLICY: compact            
+  KAFKA_SUBSCRIPTABLE_TOPICS: ENTITY_INSTANCE_CREATED,ENTITY_INSTANCE_UPDATED,ENTITY_INSTANCE_DELETED  
+
+---  
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:latest
+          ports:
+            - containerPort: 9092
+            - containerPort: 29092
+          envFrom:  
+            - configMapRef:
+                name: kafka                                  
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /usr/share/kafka/data
+            - name: kafka-logs
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: kafka-data
+          persistentVolumeClaim:
+            claimName: kafka-pvc
+        - name: kafka-logs
+          persistentVolumeClaim:
+            claimName: kafka-logs-pvc
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: default
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+    - name: kafka2
+      protocol: TCP
+      port: 29092
+      targetPort: 29092  

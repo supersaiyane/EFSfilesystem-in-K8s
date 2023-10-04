@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zookeeper-pv
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Gi
+  nfs:
+    path: /zookeeper
+    server: fs-09eff9099a3d1bfb6.efs.us-east-2.amazonaws.com
+  persistentVolumeReclaimPolicy: Retain
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zookeeper-pvc
+  namespace: default
+spec:
+  storageClassName: efs
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  volumeName: zookeeper-pv
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: zookeeper
+  namespace: default
+data:
+  ZOOKEEPER_CLIENT_PORT: "2181"
+  ZOOKEEPER_SERVER_ID: "1"
+  ZOOKEEPER_TICK_TIME: "2000"
+  ZOOKEEPER_INIT_LIMIT: "5"
+  ZOOKEEPER_SYNC_LIMIT: "2"
+  
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: zookeeper
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:latest
+          ports:
+            - containerPort: 2181
+          envFrom:  
+            - configMapRef:
+                name: zookeeper            
+          volumeMounts:
+            - name: zookeeper-data
+              mountPath: /usr/share/zookeeper/data
+      volumes:
+        - name: zookeeper-data
+          persistentVolumeClaim:
+            claimName: zookeeper-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper-service
+  namespace: default
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      protocol: TCP
+      port: 2181
+      targetPort: 2181
+    - name: followers
+      protocol: TCP
+      port: 2888
+      targetPort: 2888
+    - name: election
+      protocol: TCP
+      port: 3888
+      targetPort: 3888
