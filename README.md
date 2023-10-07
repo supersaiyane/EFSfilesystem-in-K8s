@@ -1,5 +1,5 @@
 # EFSfilesystem in Kubernetes
-![Visitors](https://vbr.wocr.tk/badge?page_id=efs)
+[![GitHub followers](https://img.shields.io/github/followers/supersaiyane?label=Follow&style=social)](https://github.com/supersaiyane/?tab=follow) ![Visitors](https://vbr.wocr.tk/badge?page_id=efs)
 ## Components Involved
 * AWS
   * NFS
